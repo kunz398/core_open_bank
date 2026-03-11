@@ -53,7 +53,7 @@ public class AppConfig {
     public String getDbUrl() { return dbUrl; }
     public String getDbUsername() { return dbUsername; }
     public String getSmtpHost() { return smtpHost; }
-    public int getSmtpPort() { return smtpPort; }
+     public int getSmtpPort() { return smtpPort; }
     public String getSmtpFrom() { return smtpFrom; }
     public String getActiveProfile() { return activeProfile; }
 }
