@@ -1,0 +1,24 @@
+Entity first       → defines what a User looks like in Java
+Repository second  → gives you DB operations on that entity
+Service third      → business logic using the repository
+Controller last    → HTTP layer using the service
+
+
+
+
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with
+'debug' enabled.
+2026-03-12T17:49:10.866+12:00 ERROR 51156 --- [ocbs] [           main] o.s.boot.SpringApplication
+          : Application run failed
+
+org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name
+'userController' defined in file [C:\Code\cbs\ocbs\target\classes\com\ocbs\ocbs\modules\auth\control
+ler\UserController.class]: Unsatisfied dependency expressed through constructor parameter 0:
+Error creating bean with name 'userService' defined in file
+ [C:\Code\cbs\ocbs\target\classes\com\ocbs\ocbs\modules\auth\service\UserService.class]:
+  Unsatisfied dependency expressed through constructor parameter 0: Error creating
+  bean with name 'userRepository' defined in com.ocbs.ocbs.modules.auth.repository.UserRepository defined
+  in @EnableJpaRepositories declared on DataJpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration:
+  No property 'findByEmail' found for type 'User'
+	at org.spri

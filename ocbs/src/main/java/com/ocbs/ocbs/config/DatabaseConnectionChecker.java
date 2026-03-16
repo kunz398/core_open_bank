@@ -18,6 +18,14 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.pool.HikariPool;
+import com.zaxxer.hikari.HikariPoolMXBean;
+import com.zaxxer.hikari.HikariConfigMXBean;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
+import java.util.Arrays;
 @Component
 @Profile("dev")
 public class DatabaseConnectionChecker {
@@ -44,25 +52,99 @@ public class DatabaseConnectionChecker {
     @Value("${spring.database.backup.pgdump-path:pg_dump}")
     private String pgDumpPath;
 
-    public DatabaseConnectionChecker(DataSource dataSource) {
+    private final Environment environment;
+
+    public DatabaseConnectionChecker(DataSource dataSource, Environment environment) {
         this.dataSource = dataSource;
+        this.environment = environment;
     }
 
     @EventListener(ApplicationReadyEvent.class)
+    @Order(1)                          // runs first
+    public void checkActiveProfile() {
+        String profile = Arrays.stream(environment.getActiveProfiles())
+                .findFirst()
+                .orElse("default")
+                .toUpperCase();
+
+        switch (profile) {
+            case "PROD" -> {
+                logger.warn("┌─────────────────────────────────────────────────┐");
+                logger.warn("│                                                 │");
+                logger.warn("│          ⚠   PRODUCTION ENVIRONMENT  ⚠         │");
+                logger.warn("│                                                 │");
+                logger.warn("│      ALL ACTIONS ARE LIVE AND IRREVERSIBLE      │");
+                logger.warn("│         VERIFY ALL CHANGES BEFORE DEPLOY        │");
+                logger.warn("│                                                 │");
+                logger.warn("└─────────────────────────────────────────────────┘");
+            }
+            case "DEV" -> {
+                logger.info("┌─────────────────────────────────────────────────┐");
+                logger.info("│                                                 │");
+                logger.info("│           DEVELOPMENT  ENVIRONMENT              │");
+                logger.info("│                                                 │");
+                logger.info("│          Safe to test — not production          │");
+                logger.info("│                                                 │");
+                logger.info("└─────────────────────────────────────────────────┘");
+            }
+            default -> {
+                logger.warn("┌─────────────────────────────────────────────────┐");
+                logger.warn("│                                                 │");
+                logger.warn("│         UNKNOWN ENVIRONMENT : {}             │", profile);
+                logger.warn("│                                                 │");
+                logger.warn("│         Verify your active Spring profile       │");
+                logger.warn("│                                                 │");
+                logger.warn("└─────────────────────────────────────────────────┘");
+            }
+        }
+    }
+    @EventListener(ApplicationReadyEvent.class)
+    @Order(2)
     public void checkDatabaseConnection() {
         try (Connection connection = dataSource.getConnection()) {
-            String dbUrl = connection.getMetaData().getURL();
-            String dbProduct = connection.getMetaData().getDatabaseProductName();
-            String dbVersion = connection.getMetaData().getDatabaseProductVersion();
-            logger.info("Database connection successful!");
-            logger.info("  URL     : {}", dbUrl);
-            logger.info("  Product : {} {}", dbProduct, dbVersion);
+
+            // DB metadata
+            var meta = connection.getMetaData();
+
+            // Cast to HikariDataSource to get pool stats
+            HikariDataSource hikariDS = (HikariDataSource) dataSource;
+            HikariPoolMXBean poolBean = hikariDS.getHikariPoolMXBean();
+            HikariConfigMXBean configBean = hikariDS.getHikariConfigMXBean();
+
+            logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            logger.info("  DATABASE CONNECTION");
+            logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            logger.info("  Status    : CONNECTED ✓");
+            logger.info("  URL       : {}", meta.getURL());
+            logger.info("  Database  : {} v{}", meta.getDatabaseProductName(), meta.getDatabaseProductVersion());
+            logger.info("  Driver    : {} v{}", meta.getDriverName(), meta.getDriverVersion());
+            logger.info("  Schema    : {}", connection.getSchema());
+            logger.info("  Catalog   : {}", connection.getCatalog());
+            logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            logger.info("  HIKARICP POOL — {}", configBean.getPoolName());
+            logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            logger.info("  Pool Size (max)    : {}", configBean.getMaximumPoolSize());
+            logger.info("  Min Idle           : {}", configBean.getMinimumIdle());
+            logger.info("  Conn Timeout (ms)  : {}", configBean.getConnectionTimeout());
+            logger.info("  Idle Timeout (ms)  : {}", configBean.getIdleTimeout());
+            logger.info("  Max Lifetime (ms)  : {}", configBean.getMaxLifetime());
+            logger.info("─────────────────────────────────────────────────");
+            logger.info("  Active Connections : {}", poolBean.getActiveConnections());
+            logger.info("  Idle Connections   : {}", poolBean.getIdleConnections());
+            logger.info("  Total Connections  : {}", poolBean.getTotalConnections());
+            logger.info("  Threads Awaiting   : {}", poolBean.getThreadsAwaitingConnection());
+            logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
         } catch (SQLException e) {
-            logger.error("Database connection failed: {}", e.getMessage());
+            logger.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            logger.error("  DATABASE CONNECTION FAILED");
+            logger.error("  Reason : {}", e.getMessage());
+            logger.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         }
     }
 
     @EventListener(ApplicationReadyEvent.class)
+    @Order(3)
     public void backupDatabase() {
         if (!backupEnabled) {
             logger.info("Database backup is disabled (spring.database.backup=false)");
