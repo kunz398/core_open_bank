@@ -110,6 +110,12 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public List<User> getAllUsersIncludingSystem() {
+        log.info("Fetching all users including system");
+        return userRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
         public User getUserByUsername(String username)
         {
         log.info("Fetching user by username: {}", username);

@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -28,15 +30,43 @@ public class UserController {
     private final AuditLogService auditLogService;
 
     // -- GET /api/v1/users --------------------------------------
-    // Get all users
     @GetMapping
-    public ResponseEntity<List<UserResponse>> getAllUsers(
-            HttpServletRequest httpRequest) {
-
+    public ResponseEntity<List<UserResponse>> getAllUsers(HttpServletRequest httpRequest) {
         log.info("GET /api/v1/users — ip={}", httpRequest.getRemoteAddr());
-
         List<User> users = userService.getAllUsers();
         return ResponseEntity.ok(userMapper.toResponseList(users));
     }
 
+    // -- GET /api/v1/users/all (includes system user) -----------
+    @GetMapping("/all")
+    public ResponseEntity<List<UserResponse>> getAllUsersIncludingSystem(HttpServletRequest httpRequest) {
+        log.info("GET /api/v1/users/all — ip={}", httpRequest.getRemoteAddr());
+        List<User> users = userService.getAllUsersIncludingSystem();
+        return ResponseEntity.ok(userMapper.toResponseList(users));
+    }
+
+    // -- POST /api/v1/users -------------------------------------
+    @PostMapping
+    public ResponseEntity<UserResponse> createUser(
+            @Valid @RequestBody CreateUserRequest request,
+            HttpServletRequest httpRequest) {
+
+        // The JWT filter sets the principal to the caller's UUID
+        UUID callerUuid = (UUID) SecurityContextHolder.getContext()
+                .getAuthentication().getPrincipal();
+
+        log.info("POST /api/v1/users — ip={} caller={}", httpRequest.getRemoteAddr(), callerUuid);
+
+        User created = userService.createUser(
+                request.getUsername(),
+                request.getEmail(),
+                request.getPassword(),
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPhoneNumber(),
+                callerUuid);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(userMapper.toResponse(created));
+    }
 }
